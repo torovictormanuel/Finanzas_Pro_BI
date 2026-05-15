@@ -10,7 +10,7 @@ import {
 import { useApp } from '../../context/AppContext'
 import {
   calcMonthlyStats, calcBudgetProgress, calcLast6Months,
-  formatCurrency, getCategoryInfo, getMonthName
+  getCategoryInfo, getMonthName
 } from '../../utils/calculations'
 import MovementForm from '../Movements/MovementForm'
 
@@ -21,7 +21,7 @@ function CustomTooltip({ active, payload, label, dark }) {
     <div className={`rounded-xl p-3 shadow-lg border text-xs ${dark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'}`}>
       <p className="font-semibold mb-1">{label}</p>
       {payload.map(p => (
-        <p key={p.dataKey} style={{ color: p.color }}>{p.name}: {formatCurrency(p.value)}</p>
+        <p key={p.dataKey} style={{ color: p.color }}>{p.name}: {fmt(p.value)}</p>
       ))}
     </div>
   )
@@ -51,7 +51,7 @@ function StatCard({ label, value, sub, icon: Icon, accent }) {
 
 // ─── Dashboard principal ──────────────────────────────────────────────────────
 export default function Dashboard() {
-  const { transactions, monthBudgets, monthGoal, currentMonth, currentYear, darkMode } = useApp()
+  const { transactions, monthBudgets, monthGoal, currentMonth, currentYear, darkMode, fmt, allCategories } = useApp()
   const [showForm, setShowForm] = useState(false)
 
   const stats    = calcMonthlyStats(transactions, currentMonth, currentYear)
@@ -60,7 +60,7 @@ export default function Dashboard() {
 
   // Pie data
   const pieData = Object.entries(stats.byCategory)
-    .map(([id, value]) => ({ ...getCategoryInfo(id), value }))
+    .map(([id, value]) => ({ ...getCategoryInfo(id, allCategories), value }))
     .sort((a, b) => b.value - a.value)
 
   // Savings goal progress
@@ -98,21 +98,21 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <StatCard
           label="Balance"
-          value={formatCurrency(stats.balance)}
+          value={fmt(stats.balance)}
           sub={`Tasa ahorro: ${stats.savingsRate}%`}
           icon={Wallet}
           accent={stats.balance >= 0 ? 'indigo' : 'red'}
         />
         <StatCard
           label="Ingresos"
-          value={formatCurrency(stats.income)}
+          value={fmt(stats.income)}
           sub="Este mes"
           icon={TrendingUp}
           accent="green"
         />
         <StatCard
           label="Gastos"
-          value={formatCurrency(stats.expenses)}
+          value={fmt(stats.expenses)}
           sub={stats.income > 0 ? `${((stats.expenses/stats.income)*100).toFixed(0)}% del ingreso` : 'Este mes'}
           icon={TrendingDown}
           accent="red"
@@ -120,7 +120,7 @@ export default function Dashboard() {
         <StatCard
           label="Meta Ahorro"
           value={savingsGoal > 0 ? `${savingsPct.toFixed(0)}%` : '—'}
-          sub={savingsGoal > 0 ? `de ${formatCurrency(savingsGoal)}` : 'Sin meta configurada'}
+          sub={savingsGoal > 0 ? `de ${fmt(savingsGoal)}` : 'Sin meta configurada'}
           icon={Target}
           accent="amber"
         />
@@ -147,7 +147,7 @@ export default function Dashboard() {
               <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#334155' : '#f1f5f9'} />
               <XAxis dataKey="name" tick={{ fill: darkMode ? '#94a3b8' : '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: darkMode ? '#94a3b8' : '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} />
-              <Tooltip {...tooltipStyle} formatter={v => [formatCurrency(v), '']} />
+              <Tooltip {...tooltipStyle} formatter={v => [fmt(v), '']} />
               <Area type="monotone" dataKey="income"   name="Ingresos" stroke="#22c55e" fill="url(#gIncome)" strokeWidth={2} dot={false} />
               <Area type="monotone" dataKey="expenses" name="Gastos"   stroke="#ef4444" fill="url(#gExp)"    strokeWidth={2} dot={false} />
             </AreaChart>
@@ -164,7 +164,7 @@ export default function Dashboard() {
                   <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={72} paddingAngle={3} dataKey="value">
                     {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                   </Pie>
-                  <Tooltip {...tooltipStyle} formatter={v => [formatCurrency(v), '']} />
+                  <Tooltip {...tooltipStyle} formatter={v => [fmt(v), '']} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="space-y-1 mt-2">
@@ -174,7 +174,7 @@ export default function Dashboard() {
                       <div className="w-2 h-2 rounded-full" style={{ background: item.color }} />
                       <span className="text-slate-600 dark:text-slate-400">{item.label}</span>
                     </div>
-                    <span className="font-medium text-slate-700 dark:text-slate-300">{formatCurrency(item.value)}</span>
+                    <span className="font-medium text-slate-700 dark:text-slate-300">{fmt(item.value)}</span>
                   </div>
                 ))}
               </div>
@@ -196,7 +196,7 @@ export default function Dashboard() {
           </div>
           <div className="space-y-3">
             {progress.map(b => {
-              const cat = getCategoryInfo(b.category)
+              const cat = getCategoryInfo(b.category, allCategories)
               return (
                 <div key={b.id}>
                   <div className="flex items-center justify-between mb-1.5">
@@ -206,7 +206,7 @@ export default function Dashboard() {
                     </div>
                     <div className="text-right">
                       <span className={`text-sm font-semibold ${b.isOver ? 'text-red-500' : 'text-slate-600 dark:text-slate-300'}`}>
-                        {formatCurrency(b.spent)} / {formatCurrency(b.budget_amount)}
+                        {fmt(b.spent)} / {fmt(b.budget_amount)}
                       </span>
                       {stats.income > 0 && (
                         <span className="text-xs text-slate-400 dark:text-slate-500 ml-2">
@@ -225,7 +225,7 @@ export default function Dashboard() {
                   </div>
                   {b.isOver && (
                     <p className="text-xs text-red-500 mt-0.5">
-                      Superado por {formatCurrency(Math.abs(b.remaining))}
+                      Superado por {fmt(Math.abs(b.remaining))}
                     </p>
                   )}
                 </div>
@@ -241,7 +241,7 @@ export default function Dashboard() {
         {stats.transactions.length > 0 ? (
           <div className="divide-y divide-slate-100 dark:divide-slate-700">
             {stats.transactions.slice(0, 6).map(tx => {
-              const cat = getCategoryInfo(tx.category)
+              const cat = getCategoryInfo(tx.category, allCategories)
               return (
                 <div key={tx.id} className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
                   <div className="flex items-center gap-3">
@@ -257,7 +257,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <span className={`font-semibold text-sm ${tx.type === 'income' ? 'text-green-500' : 'text-red-500'}`}>
-                    {tx.type === 'income' ? '+' : '−'}{formatCurrency(tx.amount)}
+                    {tx.type === 'income' ? '+' : '−'}{fmt(tx.amount)}
                   </span>
                 </div>
               )

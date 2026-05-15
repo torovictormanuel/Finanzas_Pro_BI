@@ -6,7 +6,9 @@ import Dashboard     from './components/Dashboard'
 import MovementsView from './components/Movements/MovementsView'
 import CalendarView  from './components/Calendar/CalendarView'
 import GoalsManager  from './components/Goals/GoalsManager'
+import AnalyticsView from './components/Analytics/AnalyticsView'
 import ChatAgent     from './components/AIAgent/ChatAgent'
+import SettingsView  from './components/Settings/SettingsView'
 
 function AppContent() {
   const { user, loading } = useApp()
@@ -30,7 +32,9 @@ function AppContent() {
     movements: <MovementsView />,
     calendar:  <CalendarView />,
     goals:     <GoalsManager />,
+    analytics: <AnalyticsView />,
     agent:     <ChatAgent />,
+    settings:  <SettingsView />,
   }
 
   return (

@@ -1,10 +1,8 @@
 import React, { useState } from 'react'
 import { X, Plus, Loader2 } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
-import { EXPENSE_CATEGORIES, CATEGORIES } from '../../utils/calculations'
-
 export default function MovementForm({ onClose }) {
-  const { addTransaction, currentMonth, currentYear } = useApp()
+  const { addTransaction, currentMonth, currentYear, allExpenseCategories } = useApp()
   const today = new Date()
   const defaultDate = `${currentYear}-${String(currentMonth).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
 
@@ -37,9 +35,7 @@ export default function MovementForm({ onClose }) {
     }
   }
 
-  const cats = type === 'income'
-    ? CATEGORIES.filter(c => c.id === 'ingreso')
-    : EXPENSE_CATEGORIES
+  const cats = type === 'income' ? [] : allExpenseCategories
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -99,7 +95,7 @@ export default function MovementForm({ onClose }) {
                 Categoría
               </label>
               <div className="grid grid-cols-3 gap-2">
-                {EXPENSE_CATEGORIES.map(cat => (
+                {allExpenseCategories.map(cat => (
                   <button
                     key={cat.id} type="button"
                     onClick={() => setCategory(cat.id)}

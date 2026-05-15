@@ -1,3 +1,16 @@
+// ─── Monedas soportadas ───────────────────────────────────────────────────────
+export const CURRENCIES = [
+  { id: 'ARS', label: 'Peso Argentino', symbol: '$' },
+  { id: 'USD', label: 'Dólar (USD)',    symbol: 'US$' },
+  { id: 'EUR', label: 'Euro (EUR)',     symbol: '€' },
+]
+
+const CURRENCY_CONFIG = {
+  ARS: { locale: 'es-AR', currency: 'ARS' },
+  USD: { locale: 'en-US', currency: 'USD' },
+  EUR: { locale: 'es-ES', currency: 'EUR' },
+}
+
 // ─── Catálogo de categorías ───────────────────────────────────────────────────
 export const CATEGORIES = [
   { id: 'comida',     label: 'Comida',      color: '#f59e0b', emoji: '🍽️' },
@@ -11,8 +24,10 @@ export const CATEGORIES = [
 
 export const EXPENSE_CATEGORIES = CATEGORIES.filter(c => c.id !== 'ingreso')
 
-export const getCategoryInfo = (id) =>
-  CATEGORIES.find(c => c.id === id) ?? { id, label: id, color: '#6366f1', emoji: '📌' }
+export const getCategoryInfo = (id, allCategories) => {
+  const list = allCategories ?? CATEGORIES
+  return list.find(c => c.id === id) ?? { id, label: id, color: '#6366f1', emoji: '📌' }
+}
 
 // ─── Estadísticas mensuales ───────────────────────────────────────────────────
 export function calcMonthlyStats(transactions, month, year) {
@@ -55,9 +70,11 @@ export function calcBudgetProgress(byCategory, budgets, totalIncome) {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-export function formatCurrency(amount) {
-  return new Intl.NumberFormat('es-AR', {
-    style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2
+export function formatCurrency(amount, currency = 'ARS') {
+  const cfg = CURRENCY_CONFIG[currency] ?? CURRENCY_CONFIG.ARS
+  return new Intl.NumberFormat(cfg.locale, {
+    style: 'currency', currency: cfg.currency,
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
   }).format(amount ?? 0)
 }
 

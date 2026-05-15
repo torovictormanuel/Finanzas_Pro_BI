@@ -1,17 +1,30 @@
 import React, { useState } from 'react'
 import {
   LayoutDashboard, ListOrdered, CalendarDays, Target, Bot,
-  TrendingUp, Sun, Moon, LogOut, Menu, X, ChevronLeft, ChevronRight
+  BarChart2, Settings, Sun, Moon, LogOut, Menu, X, ChevronLeft, ChevronRight
 } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
-import { getMonthName, MONTH_NAMES } from '../../utils/calculations'
+import { getMonthName } from '../../utils/calculations'
+import Logo from '../Logo'
 
-const NAV_ITEMS = [
+// Desktop sidebar + mobile overlay: todos los items
+const ALL_NAV = [
   { id: 'dashboard',  label: 'Dashboard',    icon: LayoutDashboard },
   { id: 'movements',  label: 'Movimientos',  icon: ListOrdered },
   { id: 'calendar',   label: 'Calendario',   icon: CalendarDays },
+  { id: 'analytics',  label: 'Análisis BI',  icon: BarChart2 },
   { id: 'goals',      label: 'Objetivos',    icon: Target },
   { id: 'agent',      label: 'Agente IA',    icon: Bot },
+  { id: 'settings',   label: 'Configuración',icon: Settings },
+]
+
+// Bottom nav mobile: los 5 más usados
+const BOTTOM_NAV = [
+  { id: 'dashboard',  label: 'Inicio',   icon: LayoutDashboard },
+  { id: 'movements',  label: 'Gastos',   icon: ListOrdered },
+  { id: 'analytics',  label: 'Análisis', icon: BarChart2 },
+  { id: 'goals',      label: 'Metas',    icon: Target },
+  { id: 'agent',      label: 'IA',       icon: Bot },
 ]
 
 export default function AppLayout({ children, activePage, setActivePage }) {
@@ -29,25 +42,24 @@ export default function AppLayout({ children, activePage, setActivePage }) {
     if (currentMonth === 12) { setCurrentMonth(1); setCurrentYear(y => y + 1) }
     else setCurrentMonth(m => m + 1)
   }
-
   const isCurrentMonth = () => {
     const now = new Date()
     return currentMonth === now.getMonth() + 1 && currentYear === now.getFullYear()
   }
 
+  const displayName = user?.user_metadata?.display_name || user?.email?.split('@')[0] || 'Usuario'
+
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white">
 
-      {/* ── Sidebar (desktop) ─────────────────────────── */}
-      <aside className={`hidden lg:flex flex-col w-60 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex-shrink-0`}>
+      {/* ── Desktop sidebar ───────────────────────────────────────── */}
+      <aside className="hidden lg:flex flex-col w-60 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex-shrink-0">
         {/* Brand */}
         <div className="flex items-center gap-3 px-5 py-5 border-b border-slate-200 dark:border-slate-700">
-          <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0">
-            <TrendingUp size={18} className="text-white" />
-          </div>
+          <Logo size={34} color={darkMode ? '#818cf8' : '#6366f1'} />
           <div>
             <p className="font-bold text-sm leading-tight">Finanzas Pro-BI</p>
-            <p className="text-xs text-slate-400 truncate max-w-[120px]">{user?.email}</p>
+            <p className="text-xs text-slate-400 truncate max-w-[120px]">{displayName}</p>
           </div>
         </div>
 
@@ -66,7 +78,7 @@ export default function AppLayout({ children, activePage, setActivePage }) {
 
         {/* Nav */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
+          {ALL_NAV.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => setActivePage(id)}
@@ -76,54 +88,45 @@ export default function AppLayout({ children, activePage, setActivePage }) {
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <Icon size={18} />
-              {label}
+              <Icon size={18} />{label}
             </button>
           ))}
         </nav>
 
-        {/* Footer controls */}
+        {/* Footer */}
         <div className="p-3 border-t border-slate-200 dark:border-slate-700 space-y-1">
           {isDemoMode && (
             <div className="text-xs text-amber-500 bg-amber-500/10 rounded-xl px-3 py-2 text-center mb-1">
               ⚡ Modo Demo
             </div>
           )}
-          <button
-            onClick={() => setDarkMode(!darkMode)}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-          >
+          <button onClick={() => setDarkMode(!darkMode)}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
             {darkMode ? <Sun size={18} /> : <Moon size={18} />}
             {darkMode ? 'Modo Claro' : 'Modo Oscuro'}
           </button>
-          <button
-            onClick={signOut}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
-          >
-            <LogOut size={18} />
-            Cerrar Sesión
+          <button onClick={signOut}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
+            <LogOut size={18} />Cerrar Sesión
           </button>
         </div>
       </aside>
 
-      {/* ── Mobile overlay sidebar ─────────────────────── */}
+      {/* ── Mobile overlay sidebar ────────────────────────────────── */}
       {sidebarOpen && (
         <div className="lg:hidden fixed inset-0 z-40 flex">
           <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
-          <aside className="relative w-72 bg-white dark:bg-slate-800 h-full flex flex-col shadow-2xl z-50 animate-slide-up">
+          <aside className="relative w-72 bg-white dark:bg-slate-800 h-full flex flex-col shadow-2xl z-50">
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-                  <TrendingUp size={16} className="text-white" />
-                </div>
+                <Logo size={28} color={darkMode ? '#818cf8' : '#6366f1'} />
                 <span className="font-bold">Finanzas Pro-BI</span>
               </div>
               <button onClick={() => setSidebarOpen(false)}><X size={20} /></button>
             </div>
-            <nav className="flex-1 p-3 space-y-1">
-              {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
-                <button
-                  key={id}
+            <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+              {ALL_NAV.map(({ id, label, icon: Icon }) => (
+                <button key={id}
                   onClick={() => { setActivePage(id); setSidebarOpen(false) }}
                   className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all ${
                     activePage === id
@@ -141,7 +144,8 @@ export default function AppLayout({ children, activePage, setActivePage }) {
                 {darkMode ? <Sun size={18} /> : <Moon size={18} />}
                 {darkMode ? 'Modo Claro' : 'Modo Oscuro'}
               </button>
-              <button onClick={signOut} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10">
+              <button onClick={signOut}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10">
                 <LogOut size={18} />Cerrar Sesión
               </button>
             </div>
@@ -149,7 +153,7 @@ export default function AppLayout({ children, activePage, setActivePage }) {
         </div>
       )}
 
-      {/* ── Main content ──────────────────────────────── */}
+      {/* ── Main content ──────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Mobile top bar */}
         <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
@@ -170,17 +174,14 @@ export default function AppLayout({ children, activePage, setActivePage }) {
           </button>
         </header>
 
-        {/* Page content */}
         <main className="flex-1 overflow-y-auto">
           {children}
         </main>
 
-        {/* ── Bottom Nav (mobile) ──────────────────────── */}
+        {/* ── Bottom Nav (mobile) ──────────────────────────────────── */}
         <nav className="lg:hidden flex bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 pb-safe flex-shrink-0">
-          {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setActivePage(id)}
+          {BOTTOM_NAV.map(({ id, label, icon: Icon }) => (
+            <button key={id} onClick={() => setActivePage(id)}
               className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs font-medium transition-colors ${
                 activePage === id
                   ? 'text-indigo-600 dark:text-indigo-400'
