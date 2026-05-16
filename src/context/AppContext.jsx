@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { CATEGORIES, formatCurrency } from '../utils/calculations'
 
@@ -10,6 +10,15 @@ function loadDemo()  { try { return JSON.parse(localStorage.getItem(STORE_KEY)) 
 function saveDemo(d) { localStorage.setItem(STORE_KEY, JSON.stringify(d)) }
 
 const DEFAULT_PROFILE = { currency: 'ARS', display_name: '' }
+
+// Map DB row (preferred_currency) → local shape (currency)
+function profileFromDB(row) {
+  return { currency: row.preferred_currency ?? 'ARS', display_name: row.display_name ?? '' }
+}
+// Map local shape (currency) → DB row (preferred_currency)
+function profileToDB(profile, userId) {
+  return { id: userId, preferred_currency: profile.currency, display_name: profile.display_name }
+}
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 export function AppProvider({ children }) {
@@ -24,6 +33,7 @@ export function AppProvider({ children }) {
   const [darkMode,         setDarkModeRaw]      = useState(() => localStorage.getItem('fpbi-dark') === 'true')
   const [currentMonth,     setCurrentMonth]     = useState(now.getMonth() + 1)
   const [currentYear,      setCurrentYear]      = useState(now.getFullYear())
+  const realtimeRef = useRef(null)
 
   const setDarkMode = useCallback((v) => {
     setDarkModeRaw(v)
@@ -72,12 +82,83 @@ export function AppProvider({ children }) {
       supabase.from('custom_categories').select('*').eq('user_id', user.id).order('sort_order'),
     ])
     if (txRes.data)      setTransactions(txRes.data)
-    if (goalRes.data)    { setGoals(goalRes.data); setBudgets(goalRes.data.flatMap(g => g.category_budgets ?? [])) }
-    if (profileRes.data) setUserProfile({ ...DEFAULT_PROFILE, ...profileRes.data })
+    if (goalRes.data) {
+      setGoals(goalRes.data)
+      setBudgets(goalRes.data.flatMap(g => g.category_budgets ?? []))
+    }
+    if (profileRes.data) setUserProfile(profileFromDB(profileRes.data))
     if (catRes.data)     setCustomCategories(catRes.data)
   }, [user])
 
   useEffect(() => { if (user && !isDemoMode) fetchAll() }, [user])
+
+  // ─── Real-time subscriptions ──────────────────────────────────────────────
+  useEffect(() => {
+    if (!user || isDemoMode) return
+
+    // Clean up previous channel if user changes
+    if (realtimeRef.current) {
+      supabase.removeChannel(realtimeRef.current)
+    }
+
+    const channel = supabase
+      .channel(`fpbi-user-${user.id}`)
+      // Transactions — granular updates to avoid full refetch
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'transactions',
+        filter: `user_id=eq.${user.id}`,
+      }, ({ new: row }) => {
+        setTransactions(prev => prev.some(t => t.id === row.id) ? prev : [row, ...prev])
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'transactions',
+        filter: `user_id=eq.${user.id}`,
+      }, ({ new: row }) => {
+        setTransactions(prev => prev.map(t => t.id === row.id ? row : t))
+      })
+      .on('postgres_changes', {
+        event: 'DELETE', schema: 'public', table: 'transactions',
+        filter: `user_id=eq.${user.id}`,
+      }, ({ old: row }) => {
+        setTransactions(prev => prev.filter(t => t.id !== row.id))
+      })
+      // Custom categories — refetch on any change (small table, safe to refetch)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'custom_categories',
+        filter: `user_id=eq.${user.id}`,
+      }, () => {
+        supabase.from('custom_categories').select('*').eq('user_id', user.id).order('sort_order')
+          .then(({ data }) => { if (data) setCustomCategories(data) })
+      })
+      // Goals / budgets — refetch on any change
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'monthly_goals',
+        filter: `user_id=eq.${user.id}`,
+      }, () => {
+        supabase.from('monthly_goals').select('*, category_budgets(*)').eq('user_id', user.id)
+          .then(({ data }) => {
+            if (data) {
+              setGoals(data)
+              setBudgets(data.flatMap(g => g.category_budgets ?? []))
+            }
+          })
+      })
+      // User profile — real-time sync across devices
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'user_profiles',
+        filter: `id=eq.${user.id}`,
+      }, ({ new: row }) => {
+        if (row) setUserProfile(profileFromDB(row))
+      })
+      .subscribe()
+
+    realtimeRef.current = channel
+
+    return () => {
+      supabase.removeChannel(channel)
+      realtimeRef.current = null
+    }
+  }, [user])
 
   // ─── Transactions CRUD ────────────────────────────────────────────────────
   const addTransaction = useCallback(async (tx) => {
@@ -89,7 +170,8 @@ export function AppProvider({ children }) {
     const { data, error } = await supabase
       .from('transactions').insert({ ...tx, user_id: user.id }).select().single()
     if (error) throw error
-    setTransactions(prev => [data, ...prev])
+    // Real-time INSERT event will update state; optimistic update skipped to avoid duplicates
+    setTransactions(prev => prev.some(t => t.id === data.id) ? prev : [data, ...prev])
     return data
   }, [user])
 
@@ -98,9 +180,15 @@ export function AppProvider({ children }) {
       setTransactions(prev => { const u = prev.filter(t => t.id !== id); saveDemo({ ...loadDemo(), transactions: u }); return u })
       return
     }
-    await supabase.from('transactions').delete().eq('id', id).eq('user_id', user.id)
+    // Optimistic remove
     setTransactions(prev => prev.filter(t => t.id !== id))
-  }, [user])
+    const { error } = await supabase.from('transactions').delete().eq('id', id).eq('user_id', user.id)
+    if (error) {
+      // Rollback on error
+      fetchAll()
+      throw error
+    }
+  }, [user, fetchAll])
 
   // ─── Goals CRUD ───────────────────────────────────────────────────────────
   const saveGoal = useCallback(async (month, year, savingsGoal, categoryBudgets) => {
@@ -128,7 +216,10 @@ export function AppProvider({ children }) {
     const merged = { ...userProfile, ...updates }
     setUserProfile(merged)
     if (isDemoMode) { saveDemo({ ...loadDemo(), profile: merged }); return }
-    await supabase.from('user_profiles').upsert({ id: user.id, ...merged }, { onConflict: 'id' })
+    const { error } = await supabase
+      .from('user_profiles')
+      .upsert(profileToDB(merged, user.id), { onConflict: 'id' })
+    if (error) throw error
   }, [user, userProfile])
 
   // ─── Custom categories CRUD ───────────────────────────────────────────────
@@ -149,13 +240,16 @@ export function AppProvider({ children }) {
   const updateCustomCategory = useCallback(async (id, updates) => {
     setCustomCategories(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c))
     if (isDemoMode) { saveDemo({ ...loadDemo(), customCategories: customCategories.map(c => c.id === id ? { ...c, ...updates } : c) }); return }
-    await supabase.from('custom_categories').update(updates).eq('id', id).eq('user_id', user.id)
-  }, [user, customCategories])
+    const { error } = await supabase.from('custom_categories').update(updates).eq('id', id).eq('user_id', user.id)
+    if (error) { fetchAll(); throw error }
+  }, [user, customCategories, fetchAll])
 
   const deleteCustomCategory = useCallback(async (id) => {
-    setCustomCategories(prev => { const u = prev.filter(c => c.id !== id); saveDemo({ ...loadDemo(), customCategories: u }); return u })
-    if (!isDemoMode) await supabase.from('custom_categories').delete().eq('id', id).eq('user_id', user.id)
-  }, [user])
+    setCustomCategories(prev => prev.filter(c => c.id !== id))
+    if (isDemoMode) { saveDemo({ ...loadDemo(), customCategories: customCategories.filter(c => c.id !== id) }); return }
+    const { error } = await supabase.from('custom_categories').delete().eq('id', id).eq('user_id', user.id)
+    if (error) { fetchAll(); throw error }
+  }, [user, customCategories, fetchAll])
 
   // ─── Auth ─────────────────────────────────────────────────────────────────
   const signIn  = useCallback(async (email, password) => { const { error } = await supabase.auth.signInWithPassword({ email, password }); if (error) throw error }, [])
@@ -179,16 +273,17 @@ export function AppProvider({ children }) {
     [allCategories]
   )
 
-  const monthBudgets = budgets.filter(b => {
+  const monthBudgets = useMemo(() => budgets.filter(b => {
     const g = goals.find(g => g.id === b.monthly_goal_id)
     return g && g.month === currentMonth && g.year === currentYear
-  })
+  }), [budgets, goals, currentMonth, currentYear])
 
-  const monthGoal = goals.find(g => g.month === currentMonth && g.year === currentYear) ?? null
+  const monthGoal = useMemo(() =>
+    goals.find(g => g.month === currentMonth && g.year === currentYear) ?? null,
+    [goals, currentMonth, currentYear]
+  )
 
   const currency = userProfile?.currency ?? 'ARS'
-
-  // Función de formateo con la moneda del usuario
   const fmt = useCallback((amount) => formatCurrency(amount, currency), [currency])
 
   return (
