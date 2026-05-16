@@ -125,7 +125,12 @@ export default function CalendarView() {
         </div>
       )}
 
-      {showForm && <MovementForm onClose={() => setShowForm(false)} />}
+      {showForm && (
+        <MovementForm
+          onClose={() => setShowForm(false)}
+          initialDate={getDateStr(selectedDay)}
+        />
+      )}
     </div>
   )
 }

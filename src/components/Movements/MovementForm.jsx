@@ -1,10 +1,10 @@
 import React, { useState } from 'react'
 import { X, Plus, Loader2 } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
-export default function MovementForm({ onClose }) {
+export default function MovementForm({ onClose, initialDate }) {
   const { addTransaction, currentMonth, currentYear, allExpenseCategories } = useApp()
   const today = new Date()
-  const defaultDate = `${currentYear}-${String(currentMonth).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
+  const defaultDate = initialDate ?? `${currentYear}-${String(currentMonth).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
 
   const [type,        setType]        = useState('expense')
   const [amount,      setAmount]      = useState('')
